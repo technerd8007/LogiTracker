@@ -50,7 +50,39 @@ int main() {
     /*/
     json self;
     bot->handlers.insert(
-        {"READY", [&self](json data) { self = data["user"]; }});
+        {"READY", [&self](json data) {
+             self = data["user"]; 
+             
+                json requestCommand = {
+         {"name", "request"},
+         {"description", "Request a logistics vehicle"},
+         {"type", 2},
+         {"required", true},
+         {"options", {
+             {
+                 {"name", "yes"},
+                 {"description", "yes"},
+                 {"type", 3},
+             },
+             {
+                 {"name", "no"},
+                 {"description", "no"},
+                 {"type", 3}
+             }
+         }}
+    };
+
+
+    bot->callJson()
+        ->method("POST")
+        ->target("/applications/873355455806730281/commands")
+        ->payload(requestCommand)
+        ->run();
+
+     //Slash Handler 
+    bot->handlers.insert({"INTERACTION_CREATE", slashhandler});
+
+             }});
 
     bot->prefix = "~";
 
@@ -158,35 +190,6 @@ int main() {
              }
          }});
 
-
-    json requestCommand = {
-         {"name", "request"},
-         {"description", "Request a logistics vehicle"},
-         {"type", 2},
-         {"required", true},
-         {"options", {
-             {
-                 {"name", "yes"},
-                 {"description", "yes"},
-                 {"type", 3},
-             },
-             {
-                 {"name", "no"},
-                 {"description", "no"},
-                 {"type", 3}
-             }
-         }}
-    };
-
-
-    bot->callJson()
-        ->method("POST")
-        ->target("/applications/873355455806730281/commands")
-        ->payload(requestCommand)
-        ->run();
-
-     //Slash Handler 
-    bot->handlers.insert({"INTERACTION_CREATE", slashhandler});
 
 
     // Create Asio context, this handles async stuff.
