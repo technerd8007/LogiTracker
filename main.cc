@@ -1,17 +1,48 @@
 #include "include.hh"
 #include "oauth.h"
 
-namespace asio = boost::asio;
+#include <vector>
+
 using json = nlohmann::json;
+using std::vector;
+
+namespace asio = boost::asio;
 namespace dpp = discordpp;
 
 std::string getToken();
 
 std::istream &safeGetline(std::istream &is, std::string &t);
 
-void slashhandler(json msg);
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3, std::string item4, std::string item5);
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3, std::string item4);
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3);
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2);
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1);
 
 void filter(std::string &target, const std::string &pattern);
+
+struct logiRequest {
+    std::string ruser;
+    std::string token;
+
+    std::string destination;
+
+    std::string item1;
+    std::string item2;
+    std::string item3;
+    std::string item4;
+    std::string item5;
+
+    std::string duser;
+    bool accept = false;
+    bool done = false;
+    };
+
+    //Create Logi List (GLOBAL)
+    vector<logiRequest> logiList;
 
 int main() {
     dpp::log::filter = dpp::log::info;
@@ -33,7 +64,7 @@ int main() {
         exit(1);
     }
 
-    // Create Bot object
+    //Create bot object
     auto bot = std::make_shared<DppBot>();
 
     // Don't complain about unhandled events
@@ -50,37 +81,59 @@ int main() {
     /*/
     json self;
     bot->handlers.insert(
-        {"READY", [&self](json data) {
+        {"READY",[&self, &bot](json data) {
              self = data["user"]; 
              
-                json requestCommand = {
-         {"name", "request"},
-         {"description", "Request a logistics vehicle"},
-         {"type", 2},
-         {"required", true},
-         {"options", {
-             {
-                 {"name", "yes"},
-                 {"description", "yes"},
-                 {"type", 3},
-             },
-             {
-                 {"name", "no"},
-                 {"description", "no"},
-                 {"type", 3}
-             }
-         }}
-    };
+              json requestCommand = {
+                {"name", "request"}, 
+                {"description", "Request Logistics"}, 
+                {"options",{ 
+                    { 
+                       {"name", "dest"}, 
+                       {"description", "Destination for logi"}, 
+                       {"type", 3}, 
+                       {"required", true},
+                    },
+                    {
+                        {"name", "item1"},
+                        {"description", "Item you want"},
+                        {"type", 3},
+                        {"required", true},
+                    },
+                    {
+                        {"name", "item2"},
+                        {"description", "Item you want"},
+                        {"type", 3},
+                        {"required", false},
+                    },
+                    {
+                        {"name", "item3"},
+                        {"description", "Item you want"},
+                        {"type", 3},
+                        {"required", false},
+                    },
+                    {
+                        {"name", "item4"},
+                        {"description", "Item you want"},
+                        {"type", 3},
+                        {"required", false},
+                    },
+                    {
+                        {"name", "item5"},
+                        {"description", "Item you want"},
+                        {"type", 3},
+                        {"required", false}
+                    }
+                  }
+                }
+                };  
 
-
-    bot->callJson()
-        ->method("POST")
-        ->target("/applications/873355455806730281/commands")
-        ->payload(requestCommand)
-        ->run();
-
-     //Slash Handler 
-    bot->handlers.insert({"INTERACTION_CREATE", slashhandler});
+                //Submitting a Slash Command
+                bot->callJson()
+                    ->method("POST")
+                    ->target("/applications/873355455806730281/guilds/873367900784832522/commands")
+                    ->payload(requestCommand)
+                    ->run();
 
              }});
 
@@ -128,18 +181,15 @@ int main() {
 
     bot->respond("channelinfo", [&bot](json msg) {
         bot->getChannel()
-            ->channel_id(dpp::get_snowflake(msg["873367952387366912"]))
+            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
             ->onRead([&bot, msg](bool error, json res) {
                 bot->createMessage()
-                    ->channel_id(dpp::get_snowflake(msg["873367952387366912"]))
+                    ->channel_id(dpp::get_snowflake(msg["channel_id"]))
                     ->content("```json\n" + res["body"].dump(4) + "\n```")
                     ->run();
             })
             ->run();
     });
-
-    
-        
 
     // Create handler for the MESSAGE_CREATE payload, this receives all messages
     // sent that the bot can see.
@@ -175,7 +225,7 @@ int main() {
 
                 //if(content == "/request" || "/Request")
                 //{
-               //     bot->createMessage()
+                //    bot->createMessage()
                 //    ->channel_id(dpp::get_snowflake(msg["channel_id"]))
                 //    ->content("You would like to Request?")
                 //    ->run();
@@ -191,6 +241,58 @@ int main() {
          }});
 
 
+    //Slash Handler 
+    bot->handlers.insert({"INTERACTION_CREATE", [&bot](json msg){
+        if (msg["data"]["name"].get<std::string>() == "request")
+        {
+            //std::cout << msg.dump(4);
+
+            std::string interaction_id = msg["id"].get<std::string>();
+            std::string interaction_token = msg["token"].get<std::string>();
+            //std::string message = msg["data"]["options"][0]["value"].get<std::string>();
+            std::string rUser = msg["member"]["user"]["username"].get<std::string>();
+            std::string dest = msg["data"]["options"][0]["value"].get<std::string>();
+            std::string item1 = msg["data"]["options"][1]["value"].get<std::string>();
+            if(msg["data"]["options"][2]["value"] != nlohmann::detail::value_t::null)
+            {
+                std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
+            }
+
+            //{rUser, Interaction_token, destination, item1, item2, item3, item4, item5}
+            addToList(rUser, interaction_token, dest, item1);
+            
+            json reply = {
+                {"type", 4},
+                {"data", {
+                    {"content", "processing"}
+                    }}
+            };
+
+
+            bot->callJson()
+              ->method("POST")
+              ->target("/interactions/" + interaction_id + "/" + interaction_token + "/callback")
+              ->payload(reply)
+              ->run();
+
+            json embeds = {
+                {"title", "Logi Request"},
+                {"description", "etc"}
+            };
+
+             bot->createMessage()
+                ->channel_id(dpp::get_snowflake(msg["channel_id"]))
+                ->embed(embeds)
+                ->run();
+
+            
+            
+        }
+
+        
+        
+
+        }});
 
     // Create Asio context, this handles async stuff.
     auto aioc = std::make_shared<asio::io_context>();
@@ -204,18 +306,90 @@ int main() {
     return 0;
 }
 
-void slashhandler(json msg)
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3, std::string item4, std::string item5)
 {
-    if (msg["data"]["name"].get<std::string>() == "request")
-    {
-        // do stuff, the /say slash command has been used
-        // you must reply to the interaction by /interactions/<id>/<token>/callback
-        // the format is also slightly different, i believe it's {{"type", 3}, {"data", {<message object>}}}
-        // the types are different types, e.g. string, int
+    logiList.push_back(logiRequest());
+    //Get our queue number
+    int queue = logiList.size() - 1;
+    
+    logiList[queue].ruser = ruser;
+    logiList[queue].token = token;
+    logiList[queue].destination = dest;
+    logiList[queue].item1 = item1;
+    logiList[queue].item2 = item2;
+    logiList[queue].item3 = item3;
+    logiList[queue].item4 = item4;
+    logiList[queue].item5 = item5;
 
-        // More info: https://discord.com/developers/docs/interactions/slash-commands
-    }
+
 }
+
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3, std::string item4)
+{
+    logiList.push_back(logiRequest());
+    //Get our queue number
+    int queue = logiList.size() - 1;
+    
+      logiList[queue].ruser = ruser;
+    logiList[queue].token = token;
+    logiList[queue].destination = dest;
+    logiList[queue].item1 = item1;
+    logiList[queue].item2 = item2;
+    logiList[queue].item3 = item3;
+    logiList[queue].item4 = item4;
+
+
+}
+
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+               std::string item3)
+{
+    logiList.push_back(logiRequest());
+    //Get our queue number
+    int queue = logiList.size() - 1;
+    
+    logiList[queue].ruser = ruser;
+    logiList[queue].token = token;
+    logiList[queue].destination = dest;
+    logiList[queue].item1 = item1;
+    logiList[queue].item2 = item2;
+    logiList[queue].item3 = item3;
+
+
+
+}
+
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2)
+{
+    logiList.push_back(logiRequest());
+    //Get our queue number
+    int queue = logiList.size() - 1;
+    
+    logiList[queue].ruser = ruser;
+    logiList[queue].token = token;
+    logiList[queue].destination = dest;
+    logiList[queue].item1 = item1;
+    logiList[queue].item2 = item2;
+
+
+}
+
+void addToList(std::string ruser, std::string token, std::string dest, std::string item1)
+{
+    logiList.push_back(logiRequest());
+    //Get our queue number
+    int queue = logiList.size() - 1;
+    
+    logiList[queue].ruser = ruser;
+    logiList[queue].token = token;
+    logiList[queue].destination = dest;
+    logiList[queue].item1 = item1;
+
+
+}
+
 
 std::string getToken() {
     std::string token;
