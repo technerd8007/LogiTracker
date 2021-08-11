@@ -1,5 +1,6 @@
 #include "include.hh"
 #include "oauth.h"
+#include <stdlib.h>     //for using the function sleep
 
 #include <vector>
 
@@ -43,6 +44,9 @@ struct logiRequest {
 
     //Create Logi List (GLOBAL)
     vector<logiRequest> logiList;
+
+//Map Locations
+//https://shard2.foxholestats.com/images/worldmap2.png
 
 int main() {
     dpp::log::filter = dpp::log::info;
@@ -191,99 +195,127 @@ int main() {
             ->run();
     });
 
-    // Create handler for the MESSAGE_CREATE payload, this receives all messages
-    // sent that the bot can see.
-    bot->handlers.insert(
-        {"MESSAGE_CREATE", [&bot, &self](json msg) 
-             { 
-             // Scan through mentions in the message for self
-             bool mentioned = false;
-             for (const json &mention : msg["mentions"]) {
-                 mentioned = mentioned or mention["id"] == self["id"];
-             }
-             if (mentioned) {
-                 // Identify and remove mentions of self from the message
-                 std::string content = msg["content"].get<std::string>();
-                 unsigned int oldlength, length = content.length();
-                 do {
-                     oldlength = length;
-                     content = std::regex_replace(
-                         content,
-                         std::regex(R"(<@!?)" + self["id"].get<std::string>() +
-                                    R"(> ?)"),
-                         "");
-                     length = content.length();
-                 } while (oldlength > length);
-
-                 // Get the target user's display name
-                 std::string name =
-                     (msg["member"]["nick"].is_null()
-                          ? msg["author"]["username"].get<std::string>()
-                          : msg["member"]["nick"].get<std::string>());
-
-                 std::cout << "Echoing " << name << '\n';
-
-                //if(content == "/request" || "/Request")
-                //{
-                //    bot->createMessage()
-                //    ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-                //    ->content("You would like to Request?")
-                //    ->run();
-                //}
-
-                 // Set status to Playing "with [author]"
-                 bot->send(3,
-                           {{"game", {{"name", "with " + name}, {"type", 0}}},
-                            {"status", "online"},
-                            {"afk", false},
-                            {"since", "null"}});
-             }
-         }});
-
-
     //Slash Handler 
     bot->handlers.insert({"INTERACTION_CREATE", [&bot](json msg){
         if (msg["data"]["name"].get<std::string>() == "request")
         {
             //std::cout << msg.dump(4);
 
+            std::string channel_id = msg["channel_id"].get<std::string>();
             std::string interaction_id = msg["id"].get<std::string>();
             std::string interaction_token = msg["token"].get<std::string>();
             //std::string message = msg["data"]["options"][0]["value"].get<std::string>();
             std::string rUser = msg["member"]["user"]["username"].get<std::string>();
             std::string dest = msg["data"]["options"][0]["value"].get<std::string>();
             std::string item1 = msg["data"]["options"][1]["value"].get<std::string>();
-            if(msg["data"]["options"][2]["value"] != nlohmann::detail::value_t::null)
+            json embeds;
+
+            if(msg["data"]["options"][5]["value"] != nlohmann::detail::value_t::null)
             {
                 std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
+                std::string item3 = msg["data"]["options"][3]["value"].get<std::string>();
+                std::string item4 = msg["data"]["options"][4]["value"].get<std::string>();
+                std::string item5 = msg["data"]["options"][5]["value"].get<std::string>();
+                
+                embeds = 
+                {{
+                    {"title", "LogiRequest"},
+                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3 + "\n" + item4 + "\n" + item5}
+                }};
+            }
+            else if(msg["data"]["options"][4]["value"] != nlohmann::detail::value_t::null)
+            {
+                std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
+                std::string item3 = msg["data"]["options"][3]["value"].get<std::string>();
+                std::string item4 = msg["data"]["options"][4]["value"].get<std::string>();
+
+                embeds = 
+                {{
+                    {"title", "LogiRequest"},
+                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3 + "\n" + item4}
+                }};
+            }
+            else if(msg["data"]["options"][3]["value"] != nlohmann::detail::value_t::null)
+            {
+                std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
+                std::string item3 = msg["data"]["options"][3]["value"].get<std::string>();
+
+                embeds = 
+                {{
+                    {"title", "LogiRequest"},
+                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3}
+                }};
+            }
+            else if(msg["data"]["options"][2]["value"] != nlohmann::detail::value_t::null)
+            {
+                std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
+
+                embeds = 
+                {{
+                    {"title", "LogiRequest"},
+                    {"description", "Lists of items needed\n" + item1 + "\n" + item2}
+                }};
+            }
+            else if(msg["data"]["options"][1]["value"] != nlohmann::detail::value_t::null)
+            {
+                embeds = 
+                {{
+                    {"title", "LogiRequest"},
+                    {"description", "Lists of items needed\n" + item1}
+                }};
             }
 
             //{rUser, Interaction_token, destination, item1, item2, item3, item4, item5}
             addToList(rUser, interaction_token, dest, item1);
-            
+
             json reply = {
                 {"type", 4},
                 {"data", {
-                    {"content", "processing"}
+                    {"content", "Submitted"}
                     }}
             };
-
+            json comp = 
+            {
+                {"content", "ACCEPT BELOW"},
+                {"components", {
+                    {
+                        {"type", 1},
+                        {"components", 
+                            {{
+                                {"type", 2},
+                                {"label", "ACCEPT"},
+                                {"style", 1},
+                                {"custom_id", "apply"}
+                            }}
+                        }
+                    } 
+                  }
+                }
+            };
 
             bot->callJson()
               ->method("POST")
               ->target("/interactions/" + interaction_id + "/" + interaction_token + "/callback")
               ->payload(reply)
               ->run();
+            
+            bot->createMessage()
+            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
+            ->embeds(embeds)
+            ->run();
 
-            json embeds = {
-                {"title", "Logi Request"},
-                {"description", "etc"}
-            };
+            bot->callJson()
+            ->method("POST")
+            ->target("/channels/" + channel_id + "/messages")
+            ->payload(comp)
+            ->run();
 
-             bot->createMessage()
-                ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-                ->embed(embeds)
-                ->run();
+            //bot->callJson()
+            //    ->method("POST")
+            //    ->target("/channels/" + channel_id + "/messages")
+            //    ->payload(embeds)
+            //    ->run();
+            
 
             
             
