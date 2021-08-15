@@ -14,20 +14,21 @@ std::string getToken();
 
 std::istream &safeGetline(std::istream &is, std::string &t);
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+void readIt(bool er, json msg);
+
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3, std::string item4, std::string item5);
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3, std::string item4);
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3);
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2);
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1);
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2);
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1);
 
 void filter(std::string &target, const std::string &pattern);
 
 struct logiRequest {
     std::string ruser;
-    std::string token;
 
     std::string destination;
 
@@ -40,6 +41,11 @@ struct logiRequest {
     std::string duser;
     bool accept = false;
     bool done = false;
+
+    //Message deleteStuff
+    std::string interaction_id;
+    std::string interaction_token;
+    std::string comp_id;
     };
 
     //Create Logi List (GLOBAL)
@@ -132,6 +138,14 @@ int main() {
                 }
                 };  
 
+                /*
+                bot->call()
+                   ->method("DELETE")
+                   ->target("/applications/873355455806730281/commands/874147308198064208")
+                   ->onRead(readIt)
+                   ->run();
+                */
+
                 //Submitting a Slash Command
                 bot->callJson()
                     ->method("POST")
@@ -139,70 +153,300 @@ int main() {
                     ->payload(requestCommand)
                     ->run();
 
+                /*bot->callJson()
+                    ->method("POST")
+                    ->target("/applications/873355455806730281/guilds/866495914913824768/commands")
+                    ->payload(requestCommand)
+                    ->run();
+                */
              }});
 
     bot->prefix = "~";
+    
 
-    bot->respond("help", "Mention me and I'll echo your message back!");
+    //Handles incoming messages that the bot can see
+        //
+        bot->handlers.insert({"MESSAGE_CREATE", [&bot, &self](json msg){
 
-    bot->respond("about", [&bot](json msg) {
-        std::ostringstream content;
-        content
-            << "Sure thing, "
-            << (msg["member"]["nick"].is_null()
-                    ? msg["author"]["username"].get<std::string>()
-                    : msg["member"]["nick"].get<std::string>())
-            << "!\n"
-            << "I'm a simple bot meant to demonstrate the Discord++ library.\n"
-            << "You can learn more about Discord++ at "
-               "https://discord.gg/VHAyrvspCx";
-        bot->createMessage()
-            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-            ->content(content.str())
-            ->run();
-    });
+            int counter = 0;
 
-    bot->respond("cancun", [&bot](json msg) {
-        std::ifstream ifs("cancun.jpg", std::ios::binary);
-        if (!ifs) {
-            std::cerr << "Couldn't load file 'cancun.jpg'!\n";
-            return;
-        }
-        ifs.seekg(0, std::ios::end);
-        std::ifstream::pos_type fileSize = ifs.tellg();
-        ifs.seekg(0, std::ios::beg);
-        auto file = std::make_shared<std::string>(fileSize, '\0');
-        ifs.read(file->data(), fileSize);
+            //std::cout << msg.dump(4);
 
-        bot->createMessage()
-            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-            ->content("We're goin' on a trip")
-            ->filename("cancun.jpg")
-            ->filetype("image/jpg")
-            ->file(file)
-            ->run();
-    });
-
-    bot->respond("channelinfo", [&bot](json msg) {
-        bot->getChannel()
-            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-            ->onRead([&bot, msg](bool error, json res) {
-                bot->createMessage()
-                    ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-                    ->content("```json\n" + res["body"].dump(4) + "\n```")
-                    ->run();
-            })
-            ->run();
-    });
+            //Determine if its interaction reaction
+            if(msg["components"][0]["components"] != nlohmann::detail::value_t::null)
+            {
+                //std::cout << "Handler Incoming Message: " << msg.dump(4) << "\n\n";
+                
+                for(vector<logiRequest>::iterator it = logiList.begin(); it != logiList.end(); it++) {
+                    std::string Comp_id = msg["id"].get<std::string>();
+                        
+                        
+                        if(it->accept == false && it->comp_id == "")
+                        {
+                            //std::cout << "ACCEPT NEW HANDLES";
+                            int queue = logiList.size() - 1;
+                            logiList[queue].comp_id = Comp_id;
+                        }
+                        
+                        if(it->accept == true)
+                        {
+                            //std::cout << "ACCEPT HANDLES";
+                            logiList[counter].comp_id = Comp_id;
+                        }
+                    counter++;
+                }
+            }
+        }});
 
     //Slash Handler 
     bot->handlers.insert({"INTERACTION_CREATE", [&bot](json msg){
+
+        //std::cout << "SLASH HANDLER\n" << msg.dump(4);
+        
+        //Handles Buttons 
+        if(msg["data"]["custom_id"] != nlohmann::detail::value_t::null){
+        
+        //Counter to determine which array position it is in. 
+        int counter = 0;
+
+            for(vector<logiRequest>::const_iterator it = logiList.begin(); it != logiList.end(); it++) {
+                
+                //Handles Deliverd button
+                if (it->interaction_id + "/delivered" == msg["data"]["custom_id"].get<std::string>()){
+                    std::string s_interaction_id = msg["id"].get<std::string>();
+                    std::string interaction_token = msg["token"].get<std::string>();
+                    std::string s_interaction_token = it->interaction_token;
+                    std::string comp_id = it->comp_id;
+                    
+                    if(it->duser == msg["member"]["user"]["username"].get<std::string>())
+                    {
+                         bot->callJson()
+                            ->method("POST")
+                            ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+                            ->payload(json({{"type", 4},{"data", {{"content", "Thank you " + it->duser + " for your contribution.\nGodspeed WDF."}}}}))
+                            ->run();
+
+                        //Delete The buttons
+                        bot->deleteMessage()
+                           ->channel_id(dpp::get_snowflake(msg["channel_id"]))
+                           ->message_id(dpp::get_snowflake(comp_id))
+                           ->run();
+
+                        //Delete The embeds
+                        bot->call()
+                           ->method("DELETE")
+                           ->target("/webhooks/873355455806730281/" + s_interaction_token + "/messages/@original")
+                           ->run();
+                    
+                        logiList[counter] = logiList.back();
+                        logiList.pop_back();
+                        break;
+
+                    } else {
+                        bot->callJson()
+                           ->method("POST")
+                           ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+                           ->payload(json({{"type", 1}}))
+                           ->run();
+
+                        break;
+                    }
+
+                }
+
+                //Handles Accept Button
+                if (it->interaction_id == msg["data"]["custom_id"].get<std::string>()) {
+                    
+                    //std::cout << "Handler Accpet Button: " << msg.dump(4) << "\n\n";
+
+                    std::string channel_id = msg["channel_id"].get<std::string>();
+                    std::string rUser = msg["member"]["user"]["username"].get<std::string>();
+                    std::string s_interaction_id = msg["id"].get<std::string>();
+                    std::string interaction_token = msg["token"].get<std::string>();
+                    std::string s_interaction_token = it->interaction_token;
+                    std::string dest = it->destination;
+                    std::string comp_id = it->comp_id;
+
+                    json embeds;
+
+                    //Delete The embeds
+                    bot->call()
+                       ->method("DELETE")
+                       ->target("/webhooks/873355455806730281/" + s_interaction_token + "/messages/@original")
+                       ->run();
+
+                    //Delete The buttons
+                    bot->deleteMessage()
+                        ->channel_id(dpp::get_snowflake(msg["channel_id"]))
+                        ->message_id(dpp::get_snowflake(comp_id))
+                        ->run();
+
+                    //Determine how many items there are
+                        if(it->item5 != "")
+                        {
+                            std::string item1 = it->item1;
+                            std::string item2 = it->item2;
+                            std::string item3 = it->item3;
+                            std::string item4 = it->item4;
+                            std::string item5 = it->item5;
+
+                            embeds = 
+                            {{
+                                {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                                {"description", "\n     " + it->item1 + "     \n" + it->item2 + "\n     " + it->item3 + "\n     " + it->item4 + "\n     " + it->item5},
+                                {"color", "4718336"}
+                            }};
+                        } else if(it->item4 != "")
+                        {
+                            std::string item1 = it->item1;
+                            std::string item2 = it->item2;
+                            std::string item3 = it->item3;
+                            std::string item4 = it->item4;
+
+                            embeds = 
+                            {{
+                                {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                                {"description", "\n     " + it->item1 + "     \n" + it->item2 + "\n     " + it->item3 + "\n     " + it->item4},
+                                {"color", "4718336"}
+                            }};
+                        } else if(it->item3 != "")
+                        {
+                            std::string item1 = it->item1;
+                            std::string item2 = it->item2;
+                            std::string item3 = it->item3;
+                            embeds = 
+                            {{
+                                {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                                {"description", "\n     " + it->item1 + "     \n" + it->item2 + "\n     " + it->item3 },
+                                {"color", "4718336"}
+                            }};
+                        } else if(it->item2 != "")
+                        {
+                            std::string item1 = it->item1;
+                            std::string item2 = it->item2;
+
+                            embeds = 
+                            {{
+                                {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                                {"description", "\n     " + it->item1 + "     \n" + it->item2},
+                                {"color", "4718336"}
+                            }};
+                        } else if(it->item1 != "")
+                        {
+                            std::string item1 = it->item1;
+
+                            embeds = 
+                            {{
+                                {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                                {"description", "\n    " + it->item1},
+                                {"color", "4718336"}
+                            }};   
+                        }
+
+
+
+                    logiList[counter].accept = true;
+                    logiList[counter].duser = rUser;
+
+                    //std::cout << "\n" << logiList[counter].accept << "\n";
+
+                    json comp = 
+                    {
+                        {"content", "Accepted by: " + rUser},
+                        {"components", {
+                            {
+                                {"type", 1},
+                                {"components", 
+                                    {{
+                                        {"type", 2},
+                                        {"label", "CANCEL LOGI"},
+                                        {"style", 4},
+                                        {"custom_id", s_interaction_id + "/cancel"},
+                                    
+                                    },
+                                    {
+                                        {"type", 2},
+                                        {"label", "Delivered"},
+                                        {"style", 1},
+                                        {"custom_id", s_interaction_id + "/delivered"},
+                                    }}
+                                }
+                            } 
+                          }
+                        }
+                    };
+
+                    //Create Embed for confirmation 
+                    bot->callJson()
+                       ->method("POST")
+                       ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+                       ->payload(json({{"type", 4},{"data", {{"embeds", embeds}}}}))
+                       ->run();
+
+                    bot->callJson()
+                       ->method("POST")
+                       ->target("/channels/" + channel_id + "/messages")
+                       ->payload(comp)
+                       ->run();
+
+                    logiList[counter].interaction_token = interaction_token;
+                    logiList[counter].interaction_id = s_interaction_id;
+
+                }
+
+                 //Handles Canceling and deletion of the request
+                if (it->interaction_id + "/cancel" == msg["data"]["custom_id"].get<std::string>()){
+                    std::string s_interaction_id = msg["id"].get<std::string>();
+                    std::string interaction_token = msg["token"].get<std::string>();
+                    std::string s_interaction_token = it->interaction_token;
+                    std::string comp_id = it->comp_id;
+
+                    if(it->ruser != msg["member"]["user"]["username"].get<std::string>() || it->duser != msg["member"]["user"]["username"].get<std::string>())
+                    {
+                        bot->callJson()
+                           ->method("POST")
+                           ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+                           ->payload(json({{"type", 1}}))
+                           ->run();
+
+                        break;
+                    }
+
+                    bot->callJson()
+                       ->method("POST")
+                       ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+                       ->payload(json({{"type", 1}}))
+                       ->run();
+
+                    //Delete The buttons
+                    bot->deleteMessage()
+                        ->channel_id(dpp::get_snowflake(msg["channel_id"]))
+                        ->message_id(dpp::get_snowflake(comp_id))
+                        ->run();
+
+                    //Delete The embeds
+                    bot->call()
+                       ->method("DELETE")
+                       ->target("/webhooks/873355455806730281/" + s_interaction_token + "/messages/@original")
+                       ->run();
+                    
+                    logiList[counter] = logiList.back();
+                    logiList.pop_back();
+                    break;
+                    //counter--;
+                }
+                counter++;
+            }
+        }
+
+        //Handle regular interaction requests
+        if(msg["data"]["name"] != nlohmann::detail::value_t::null){
         if (msg["data"]["name"].get<std::string>() == "request")
         {
             //std::cout << msg.dump(4);
 
             std::string channel_id = msg["channel_id"].get<std::string>();
-            std::string interaction_id = msg["id"].get<std::string>();
+            std::string s_interaction_id = msg["id"].get<std::string>();
             std::string interaction_token = msg["token"].get<std::string>();
             //std::string message = msg["data"]["options"][0]["value"].get<std::string>();
             std::string rUser = msg["member"]["user"]["username"].get<std::string>();
@@ -217,10 +461,14 @@ int main() {
                 std::string item4 = msg["data"]["options"][4]["value"].get<std::string>();
                 std::string item5 = msg["data"]["options"][5]["value"].get<std::string>();
                 
+                //{rUser, Interaction_token, destination, item1, item2, item3, item4, item5}
+                addToList(rUser, s_interaction_id, interaction_token, dest, item1, item2, item3, item4, item5);
+
                 embeds = 
                 {{
-                    {"title", "LogiRequest"},
-                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3 + "\n" + item4 + "\n" + item5}
+                    {"title", "LogiRequest \n\n Item's List :"},
+                    {"description", item1 + "\n     " + item2 + "\n" + item3 + "\n" + item4 + "\n" + item5},
+                    {"color", "5814783"}
                 }};
             }
             else if(msg["data"]["options"][4]["value"] != nlohmann::detail::value_t::null)
@@ -229,10 +477,14 @@ int main() {
                 std::string item3 = msg["data"]["options"][3]["value"].get<std::string>();
                 std::string item4 = msg["data"]["options"][4]["value"].get<std::string>();
 
+                //{rUser, s_interaction_id, destination, item1, item2, item3, item4, item5}
+                addToList(rUser, s_interaction_id, interaction_token, dest, item1, item2, item3, item4);
+
                 embeds = 
                 {{
-                    {"title", "LogiRequest"},
-                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3 + "\n" + item4}
+                    {"title", "LogiRequest \n\n Item's List :"},
+                    {"description", item1 + "\n" + item2 + "\n" + item3 + "\n" + item4},
+                    {"color", "5814783"}
                 }};
             }
             else if(msg["data"]["options"][3]["value"] != nlohmann::detail::value_t::null)
@@ -240,43 +492,46 @@ int main() {
                 std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
                 std::string item3 = msg["data"]["options"][3]["value"].get<std::string>();
 
+                //{rUser, s_interaction_id, destination, item1, item2, item3, item4, item5}
+                addToList(rUser, s_interaction_id, interaction_token, dest, item1, item2, item3);
+
                 embeds = 
                 {{
-                    {"title", "LogiRequest"},
-                    {"description", "Lists of items needed\n" + item1 + "\n" + item2 + "\n" + item3}
+                    {"title", "LogiRequest \n\n Item's List :"},
+                    {"description", item1 + "\n" + item2 + "\n" + item3},
+                    {"color", "5814783"}
                 }};
             }
             else if(msg["data"]["options"][2]["value"] != nlohmann::detail::value_t::null)
             {
                 std::string item2 = msg["data"]["options"][2]["value"].get<std::string>();
 
+                //{rUser, s_interaction_id, destination, item1, item2, item3, item4, item5}
+                addToList(rUser, s_interaction_id, interaction_token, dest, item1, item2);
                 embeds = 
                 {{
-                    {"title", "LogiRequest"},
-                    {"description", "Lists of items needed\n" + item1 + "\n" + item2}
+                    {"title", "LogiRequest \n\n Item's List :"},
+                    {"description", item1 + "\n" + item2},
+                    {"color", "5814783"}
                 }};
             }
             else if(msg["data"]["options"][1]["value"] != nlohmann::detail::value_t::null)
             {
+
+                //{rUser, s_interaction_id, destination, item1, item2, item3, item4, item5}
+                addToList(rUser, s_interaction_id, interaction_token, dest, item1);
+
                 embeds = 
                 {{
-                    {"title", "LogiRequest"},
-                    {"description", "Lists of items needed\n" + item1}
+                    {"title", "LogiRequest     \n\nDestination: " + dest + "\n\nItem's List :"},
+                    {"description", item1},
+                    {"color", "5814783"}
                 }};
             }
 
-            //{rUser, Interaction_token, destination, item1, item2, item3, item4, item5}
-            addToList(rUser, interaction_token, dest, item1);
-
-            json reply = {
-                {"type", 4},
-                {"data", {
-                    {"content", "Submitted"}
-                    }}
-            };
             json comp = 
             {
-                {"content", "ACCEPT BELOW"},
+                {"content", "Requested by: " + rUser},
                 {"components", {
                     {
                         {"type", 1},
@@ -285,7 +540,7 @@ int main() {
                                 {"type", 2},
                                 {"label", "ACCEPT"},
                                 {"style", 1},
-                                {"custom_id", "apply"}
+                                {"custom_id", s_interaction_id},
                             }}
                         }
                     } 
@@ -295,34 +550,18 @@ int main() {
 
             bot->callJson()
               ->method("POST")
-              ->target("/interactions/" + interaction_id + "/" + interaction_token + "/callback")
-              ->payload(reply)
+              ->target("/interactions/" + s_interaction_id + "/" + interaction_token + "/callback")
+              ->payload(json({{"type", 4},{"data", {{"embeds", embeds}}}}))
               ->run();
-            
-            bot->createMessage()
-            ->channel_id(dpp::get_snowflake(msg["channel_id"]))
-            ->embeds(embeds)
-            ->run();
 
             bot->callJson()
             ->method("POST")
             ->target("/channels/" + channel_id + "/messages")
             ->payload(comp)
-            ->run();
-
-            //bot->callJson()
-            //    ->method("POST")
-            //    ->target("/channels/" + channel_id + "/messages")
-            //    ->payload(embeds)
-            //    ->run();
-            
-
-            
-            
-        }
-
+            ->run();   
         
-        
+        } }
+
 
         }});
 
@@ -338,7 +577,13 @@ int main() {
     return 0;
 }
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+//Helper function to read out any Get
+void readIt(bool er, json msg)
+{
+    std::cout << msg.dump(4);
+}
+
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3, std::string item4, std::string item5)
 {
     logiList.push_back(logiRequest());
@@ -346,7 +591,8 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
     int queue = logiList.size() - 1;
     
     logiList[queue].ruser = ruser;
-    logiList[queue].token = token;
+    logiList[queue].interaction_id = interaction_id;
+    logiList[queue].interaction_token = interaction_token;
     logiList[queue].destination = dest;
     logiList[queue].item1 = item1;
     logiList[queue].item2 = item2;
@@ -357,15 +603,16 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
 
 }
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3, std::string item4)
 {
     logiList.push_back(logiRequest());
     //Get our queue number
     int queue = logiList.size() - 1;
     
-      logiList[queue].ruser = ruser;
-    logiList[queue].token = token;
+    logiList[queue].ruser = ruser;
+    logiList[queue].interaction_id = interaction_id;
+    logiList[queue].interaction_token = interaction_token;
     logiList[queue].destination = dest;
     logiList[queue].item1 = item1;
     logiList[queue].item2 = item2;
@@ -375,7 +622,7 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
 
 }
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2, 
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2, 
                std::string item3)
 {
     logiList.push_back(logiRequest());
@@ -383,7 +630,8 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
     int queue = logiList.size() - 1;
     
     logiList[queue].ruser = ruser;
-    logiList[queue].token = token;
+    logiList[queue].interaction_id = interaction_id;
+    logiList[queue].interaction_token = interaction_token;
     logiList[queue].destination = dest;
     logiList[queue].item1 = item1;
     logiList[queue].item2 = item2;
@@ -393,14 +641,15 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
 
 }
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1, std::string item2)
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1, std::string item2)
 {
     logiList.push_back(logiRequest());
     //Get our queue number
     int queue = logiList.size() - 1;
     
     logiList[queue].ruser = ruser;
-    logiList[queue].token = token;
+    logiList[queue].interaction_id = interaction_id;
+    logiList[queue].interaction_token = interaction_token;
     logiList[queue].destination = dest;
     logiList[queue].item1 = item1;
     logiList[queue].item2 = item2;
@@ -408,14 +657,15 @@ void addToList(std::string ruser, std::string token, std::string dest, std::stri
 
 }
 
-void addToList(std::string ruser, std::string token, std::string dest, std::string item1)
+void addToList(std::string ruser, std::string interaction_id, std::string interaction_token, std::string dest, std::string item1)
 {
     logiList.push_back(logiRequest());
     //Get our queue number
     int queue = logiList.size() - 1;
     
     logiList[queue].ruser = ruser;
-    logiList[queue].token = token;
+    logiList[queue].interaction_id = interaction_id;
+    logiList[queue].interaction_token = interaction_token;
     logiList[queue].destination = dest;
     logiList[queue].item1 = item1;
 
